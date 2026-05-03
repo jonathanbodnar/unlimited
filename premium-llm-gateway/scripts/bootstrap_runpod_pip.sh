@@ -29,9 +29,16 @@ REPO_URL="${REPO_URL:-https://github.com/jonathanbodnar/unlimited.git}"
 REPO_DIR="${REPO_DIR:-/workspace/unlimited}"
 GATEWAY_DIR="${REPO_DIR}/premium-llm-gateway"
 VENV_DIR="${VENV_DIR:-/workspace/litellm-venv}"
-PG_DATA="${PG_DATA:-/workspace/postgres-data}"
-PG_PORT="${PG_PORT:-5433}"   # avoid clashing with anything system-default
-PG_RUN="${PG_RUN:-/workspace/postgres-run}"
+
+# Postgres MUST live on the local overlay, not on /workspace. RunPod's mfs
+# network filesystem does not allow chown across uids, which breaks the
+# postgres user's ownership of its data dir. Trade-off: PG cluster is
+# ephemeral across pod stop/start; bootstrap re-init takes ~5s. The actual
+# spend data still flows into the new cluster from the moment LiteLLM starts.
+PG_DATA="${PG_DATA:-/var/lib/litellm-postgres-data}"
+PG_RUN="${PG_RUN:-/var/run/litellm-postgres}"
+PG_PORT="${PG_PORT:-5433}"
+
 STATE_DIR="${STATE_DIR:-/workspace/litellm-state}"
 BIN_DIR="${BIN_DIR:-/workspace/bin}"
 CLOUDFLARED_BIN="${BIN_DIR}/cloudflared"
