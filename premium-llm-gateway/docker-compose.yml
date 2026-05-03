@@ -1,0 +1,70 @@
+# =============================================================================
+# Premium LLM Gateway — Phase 1 (hosted models only, no GPU/vLLM)
+#
+# Services:
+#   postgres   persistent store for LiteLLM virtual keys, spend, usage logs
+#   litellm    OpenAI-compatible proxy (the only service users hit)
+#
+# Bring up:
+#   docker compose up -d
+#
+# Logs:
+#   docker compose logs -f litellm
+#
+# Health:
+#   curl http://localhost:4000/health
+# =============================================================================
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: premium-test-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: litellm
+      POSTGRES_USER: litellm
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - ./postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U litellm -d litellm"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    # Postgres is intentionally NOT exposed publicly. LiteLLM talks to it on
+    # the docker network. Uncomment to debug locally:
+    # ports:
+    #   - "5432:5432"
+
+  litellm:
+    image: ghcr.io/berriai/litellm:main-latest
+    container_name: premium-test-litellm
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "4000:4000"
+    environment:
+      DATABASE_URL: postgresql://litellm:${POSTGRES_PASSWORD}@postgres:5432/litellm
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY}
+
+      # Provider keys — referenced from litellm_config.yaml via os.environ/...
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY}
+      MIMO_API_KEY: ${MIMO_API_KEY}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+
+      # Langfuse observability (success_callback / failure_callback)
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY}
+      LANGFUSE_HOST: ${LANGFUSE_HOST}
+    volumes:
+      - ./litellm_config.yaml:/app/config.yaml:ro
+    command: ["--config", "/app/config.yaml", "--port", "4000"]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://localhost:4000/health/liveliness || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s

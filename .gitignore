@@ -1,0 +1,41 @@
+# env / secrets (everywhere)
+.env
+.env.local
+.env.*.local
+*.key
+*.pem
+
+# data volumes (created by docker compose binds)
+**/postgres/
+**/langfuse_data/
+**/redis_data/
+
+# python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+
+# node
+node_modules/
+.npm/
+.yarn/
+dist/
+build/
+.next/
+.turbo/
+*.tsbuildinfo
+
+# reports / artifacts
+premium-llm-gateway/reports/*.json
+premium-llm-gateway/reports/*.csv
+premium-llm-gateway/reports/*.md
+!premium-llm-gateway/reports/.gitkeep
+
+# editor / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp

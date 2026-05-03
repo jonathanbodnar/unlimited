@@ -1,0 +1,129 @@
+# =============================================================================
+# LiteLLM config — DEFAULT = MODE A (Premium-Heavy / Worst-Case Cost)
+#
+# Routing intent for `dev-auto` in this file:
+#   dev-auto       -> MiMo-V2.5-Pro first
+#   fallback       -> DeepSeek V4 Pro
+#   emergency      -> DeepSeek V4 Flash
+#   benchmark only -> Claude (only if explicitly requested by model name)
+#
+# To switch test modes, replace this file with one from `litellm_config_modes/`
+# and restart the litellm container. See docs/routing_modes.md.
+#
+# !!! BEFORE FIRST DEPLOY, REPLACE THE FOLLOWING PLACEHOLDERS !!!
+#   - api_base for MiMo  (REPLACE_WITH_MIMO_OPENAI_COMPATIBLE_BASE)
+#   - api_base for DeepSeek (REPLACE_WITH_DEEPSEEK_OPENAI_COMPATIBLE_BASE)
+#   - exact provider model strings (mimo-v2.5-pro / deepseek-v4-pro / deepseek-v4-flash)
+#   - input_cost_per_token / output_cost_per_token for DeepSeek models
+# Confirm these from each provider's OpenAI-compatible docs.
+# =============================================================================
+
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY
+  database_url: os.environ/DATABASE_URL
+  store_model_in_db: true
+
+litellm_settings:
+  success_callback: ["langfuse"]
+  failure_callback: ["langfuse"]
+  request_timeout: 180
+  num_retries: 1
+  set_verbose: false
+  drop_params: true
+
+model_list:
+  # ---------------------------------------------------------------------------
+  # MiMo-V2.5-Pro — primary premium coding model.
+  # Pricing here is a PLACEHOLDER assuming $1/M input, $3/M output.
+  # Confirm against MiMo's actual pricing before running a real test.
+  # ---------------------------------------------------------------------------
+  - model_name: mimo-pro
+    litellm_params:
+      model: openai/mimo-v2.5-pro
+      api_base: https://REPLACE_WITH_MIMO_OPENAI_COMPATIBLE_BASE/v1
+      api_key: os.environ/MIMO_API_KEY
+    model_info:
+      mode: chat
+      input_cost_per_token: 0.000001
+      output_cost_per_token: 0.000003
+
+  # ---------------------------------------------------------------------------
+  # DeepSeek V4 Pro — premium reasoning fallback.
+  # ---------------------------------------------------------------------------
+  - model_name: deepseek-v4-pro
+    litellm_params:
+      model: openai/deepseek-v4-pro
+      api_base: https://REPLACE_WITH_DEEPSEEK_OPENAI_COMPATIBLE_BASE/v1
+      api_key: os.environ/DEEPSEEK_API_KEY
+    model_info:
+      mode: chat
+      # REPLACE with actual values from DeepSeek pricing page.
+      input_cost_per_token: 0.0000014
+      output_cost_per_token: 0.0000028
+
+  # ---------------------------------------------------------------------------
+  # DeepSeek V4 Flash — cheap downgrade / emergency fallback.
+  # ---------------------------------------------------------------------------
+  - model_name: deepseek-v4-flash
+    litellm_params:
+      model: openai/deepseek-v4-flash
+      api_base: https://REPLACE_WITH_DEEPSEEK_OPENAI_COMPATIBLE_BASE/v1
+      api_key: os.environ/DEEPSEEK_API_KEY
+    model_info:
+      mode: chat
+      # REPLACE with actual values from DeepSeek pricing page.
+      input_cost_per_token: 0.00000014
+      output_cost_per_token: 0.00000028
+
+  # ---------------------------------------------------------------------------
+  # Claude — benchmark only. Do NOT route default traffic here.
+  # Cost detection is automatic for Anthropic in LiteLLM.
+  # ---------------------------------------------------------------------------
+  - model_name: claude-benchmark
+    litellm_params:
+      model: anthropic/claude-sonnet-4-5
+      api_key: os.environ/ANTHROPIC_API_KEY
+    model_info:
+      mode: chat
+
+  # ---------------------------------------------------------------------------
+  # dev-auto — the ONLY model exposed to Jonathan in the IDE.
+  # Phase 1 binds it to MiMo-Pro; routing/fallbacks below decide the rest.
+  # ---------------------------------------------------------------------------
+  - model_name: dev-auto
+    litellm_params:
+      model: openai/mimo-v2.5-pro
+      api_base: https://REPLACE_WITH_MIMO_OPENAI_COMPATIBLE_BASE/v1
+      api_key: os.environ/MIMO_API_KEY
+    model_info:
+      mode: chat
+      input_cost_per_token: 0.000001
+      output_cost_per_token: 0.000003
+
+router_settings:
+  routing_strategy: simple-shuffle
+  num_retries: 1
+  allowed_fails: 2
+  cooldown_time: 60
+
+  # Plain provider failure fallbacks.
+  fallbacks:
+    - dev-auto:
+        - deepseek-v4-pro
+        - deepseek-v4-flash
+        - claude-benchmark
+    - mimo-pro:
+        - deepseek-v4-pro
+        - deepseek-v4-flash
+    - deepseek-v4-pro:
+        - mimo-pro
+        - deepseek-v4-flash
+    - deepseek-v4-flash:
+        - mimo-pro
+
+  # Triggered when the prompt exceeds the primary model's context window.
+  context_window_fallbacks:
+    - dev-auto:
+        - deepseek-v4-pro
+        - deepseek-v4-flash
+        - claude-benchmark

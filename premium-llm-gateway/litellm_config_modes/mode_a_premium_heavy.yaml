@@ -1,0 +1,99 @@
+# =============================================================================
+# MODE A — Premium-Heavy / Worst-Case Cost
+# Identical to the default litellm_config.yaml. Kept here so all three modes
+# live side-by-side and can be diffed.
+#
+# Routing intent for `dev-auto`:
+#   MiMo-Pro -> DeepSeek V4 Pro -> DeepSeek V4 Flash -> Claude (benchmark only)
+# =============================================================================
+
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY
+  database_url: os.environ/DATABASE_URL
+  store_model_in_db: true
+
+litellm_settings:
+  success_callback: ["langfuse"]
+  failure_callback: ["langfuse"]
+  request_timeout: 180
+  num_retries: 1
+  set_verbose: false
+  drop_params: true
+
+model_list:
+  - model_name: mimo-pro
+    litellm_params:
+      model: openai/mimo-v2.5-pro
+      api_base: https://REPLACE_WITH_MIMO_OPENAI_COMPATIBLE_BASE/v1
+      api_key: os.environ/MIMO_API_KEY
+    model_info:
+      mode: chat
+      input_cost_per_token: 0.000001
+      output_cost_per_token: 0.000003
+
+  - model_name: deepseek-v4-pro
+    litellm_params:
+      model: openai/deepseek-v4-pro
+      api_base: https://REPLACE_WITH_DEEPSEEK_OPENAI_COMPATIBLE_BASE/v1
+      api_key: os.environ/DEEPSEEK_API_KEY
+    model_info:
+      mode: chat
+      input_cost_per_token: 0.0000014
+      output_cost_per_token: 0.0000028
+
+  - model_name: deepseek-v4-flash
+    litellm_params:
+      model: openai/deepseek-v4-flash
+      api_base: https://REPLACE_WITH_DEEPSEEK_OPENAI_COMPATIBLE_BASE/v1
+      api_key: os.environ/DEEPSEEK_API_KEY
+    model_info:
+      mode: chat
+      input_cost_per_token: 0.00000014
+      output_cost_per_token: 0.00000028
+
+  - model_name: claude-benchmark
+    litellm_params:
+      model: anthropic/claude-sonnet-4-5
+      api_key: os.environ/ANTHROPIC_API_KEY
+    model_info:
+      mode: chat
+
+  # MODE A: dev-auto goes straight to MiMo-Pro.
+  - model_name: dev-auto
+    litellm_params:
+      model: openai/mimo-v2.5-pro
+      api_base: https://REPLACE_WITH_MIMO_OPENAI_COMPATIBLE_BASE/v1
+      api_key: os.environ/MIMO_API_KEY
+    model_info:
+      mode: chat
+      input_cost_per_token: 0.000001
+      output_cost_per_token: 0.000003
+      metadata:
+        routing_mode: A
+        reason: premium_heavy
+
+router_settings:
+  routing_strategy: simple-shuffle
+  num_retries: 1
+  allowed_fails: 2
+  cooldown_time: 60
+
+  fallbacks:
+    - dev-auto:
+        - deepseek-v4-pro
+        - deepseek-v4-flash
+        - claude-benchmark
+    - mimo-pro:
+        - deepseek-v4-pro
+        - deepseek-v4-flash
+    - deepseek-v4-pro:
+        - mimo-pro
+        - deepseek-v4-flash
+    - deepseek-v4-flash:
+        - mimo-pro
+
+  context_window_fallbacks:
+    - dev-auto:
+        - deepseek-v4-pro
+        - deepseek-v4-flash
+        - claude-benchmark
